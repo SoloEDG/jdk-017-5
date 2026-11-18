@@ -16,6 +16,7 @@ export function useExport(doc: StudioDocument) {
         asset: doc.asset,
         projection: { ...doc.projection },
         edge: { ...doc.edge },
+        labels: doc.labels.map((l) => ({ ...l })),
       },
       options = { ...settings };
     try {

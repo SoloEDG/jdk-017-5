@@ -6,5 +6,6 @@ export function useStudio() {
     asset: null,
     projection: defaultProjection(),
     edge: defaultEdge(),
+    labels: [],
   });
 }

@@ -7,21 +7,79 @@ import {
   Plus,
   Minus,
   ScanLine,
+  Tag,
 } from "lucide-vue-next";
 import type { StudioDocument, Projection } from "../../../shared/types";
+import { clamp } from "../../../shared/math";
 import { usePreview } from "../model/usePreview";
 import { dragView, wheelZoom } from "../lib/gestures";
+import { projectPoint } from "../../projection/lib/coordinates";
+import { addLabel, annotateState, hitTest } from "../../annotate";
 const { doc } = defineProps<{ doc: StudioDocument }>();
 const canvas = ref<HTMLCanvasElement>();
-const { rendering } = usePreview(doc, canvas);
+const { rendering, boxes } = usePreview(doc, canvas);
 const guides = ref(false);
 let start: { x: number; y: number; p: Projection } | null = null;
+let dragLabel: {
+  id: string;
+  x: number;
+  y: number;
+  offsetX: number;
+  offsetY: number;
+} | null = null;
+function canvasPoint(e: PointerEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const size = canvas.value!.width;
+  return {
+    x: ((e.clientX - rect.left) / rect.width) * size,
+    y: ((e.clientY - rect.top) / rect.height) * size,
+    size,
+  };
+}
 function down(e: PointerEvent) {
   if (e.button !== 0) return;
+  if (annotateState.mode && doc.asset && canvas.value) {
+    const pt = canvasPoint(e);
+    const hit = hitTest(boxes.value, pt.x, pt.y);
+    if (hit) {
+      annotateState.selectedId = hit.id;
+      const label = doc.labels.find((l) => l.id === hit.id)!;
+      dragLabel = {
+        id: hit.id,
+        x: pt.x,
+        y: pt.y,
+        offsetX: label.offsetX,
+        offsetY: label.offsetY,
+      };
+    } else {
+      const uv = projectPoint(pt.x, pt.y, pt.size, pt.size, doc.projection);
+      addLabel(doc, uv.u, uv.v);
+    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    return;
+  }
   start = { x: e.clientX, y: e.clientY, p: { ...doc.projection } };
   (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 }
 function move(e: PointerEvent) {
+  if (dragLabel && canvas.value) {
+    const pt = canvasPoint(e);
+    const label = doc.labels.find((l) => l.id === dragLabel!.id);
+    if (label) {
+      label.offsetX = clamp(
+        dragLabel.offsetX + (pt.x - dragLabel.x) / pt.size,
+        -0.5,
+        0.5,
+      );
+      label.offsetY = clamp(
+        dragLabel.offsetY + (pt.y - dragLabel.y) / pt.size,
+        -0.5,
+        0.5,
+      );
+      label.pinned = true;
+    }
+    return;
+  }
   if (!start) return;
   Object.assign(
     doc.projection,
@@ -32,6 +90,10 @@ function move(e: PointerEvent) {
       (e.currentTarget as HTMLElement).clientWidth,
     ),
   );
+}
+function up() {
+  start = null;
+  dragLabel = null;
 }
 function wheel(e: WheelEvent) {
   doc.projection.zoom = wheelZoom(doc.projection.zoom, e.deltaY);
@@ -55,12 +117,12 @@ function wheel(e: WheelEvent) {
       >
       <div
         class="canvas-wrap"
-        :class="{ guides }"
+        :class="{ guides, annotating: annotateState.mode }"
         @pointerdown="down"
         @pointermove="move"
-        @pointerup="start = null"
-        @pointercancel="start = null"
-        @lostpointercapture="start = null"
+        @pointerup="up"
+        @pointercancel="up"
+        @lostpointercapture="up"
         @wheel.prevent="wheel"
       >
         <canvas ref="canvas" aria-label="小行星实时投影画布" />
@@ -68,16 +130,31 @@ function wheel(e: WheelEvent) {
         <div v-if="guides" class="crosshair" />
       </div>
       <div class="canvas-caption">
-        <span>STEREOGRAPHIC PROJECTION</span><span>600 × 600 · 预览</span>
+        <span>STEREOGRAPHIC PROJECTION</span
+        ><span>{{
+          annotateState.mode ? "标注模式 · 点击景物放置标签" : "600 × 600 · 预览"
+        }}</span>
       </div>
     </div>
     <div class="viewport-toolbar">
       <div class="gesture-hint">
-        <MousePointer2 :size="14" /> 拖动旋转 <span>·</span
-        ><Move :size="14" /> 滚轮缩放
+        <template v-if="annotateState.mode">
+          <Tag :size="14" /> 点击放置标注 <span>·</span> 拖动标签固定位置
+        </template>
+        <template v-else>
+          <MousePointer2 :size="14" /> 拖动旋转 <span>·</span
+          ><Move :size="14" /> 滚轮缩放
+        </template>
       </div>
       <div class="tool-buttons">
         <button
+          aria-label="标注模式"
+          :class="{ selected: annotateState.mode }"
+          :disabled="!doc.asset"
+          @click="annotateState.mode = !annotateState.mode"
+        >
+          <Tag :size="16" /></button
+        ><b /><button
           aria-label="缩小"
           @click="doc.projection.zoom = wheelZoom(doc.projection.zoom, 100)"
         >

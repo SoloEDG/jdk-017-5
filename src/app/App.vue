@@ -4,6 +4,7 @@ import { AssetPanel } from "../features/asset";
 import { ProjectionPanel } from "../features/projection";
 import { ViewportPanel, ViewControls } from "../features/viewport";
 import { EdgePanel } from "../features/edge";
+import { AnnotatePanel } from "../features/annotate";
 import { ExportPanel } from "../features/export";
 import { useStudio } from "./useStudio";
 const doc = useStudio();
@@ -38,9 +39,9 @@ const doc = useStudio();
       </aside>
       <ViewportPanel :doc="doc" />
       <aside class="right-sidebar">
-        <ViewControls :doc="doc" /><EdgePanel :doc="doc" /><ExportPanel
+        <ViewControls :doc="doc" /><EdgePanel :doc="doc" /><AnnotatePanel
           :doc="doc"
-        />
+        /><ExportPanel :doc="doc" />
       </aside>
     </div>
     <footer>

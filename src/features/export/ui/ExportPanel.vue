@@ -16,7 +16,7 @@ const { busy, progress, message, download, cancel } = useExport(doc);
 <template>
   <section class="panel export-panel" id="export-panel">
     <div class="section-label">
-      <span>05 / 导出作品</span><Download :size="16" />
+      <span>06 / 导出作品</span><Download :size="16" />
     </div>
     <label class="field-label" for="size">输出尺寸</label
     ><select
